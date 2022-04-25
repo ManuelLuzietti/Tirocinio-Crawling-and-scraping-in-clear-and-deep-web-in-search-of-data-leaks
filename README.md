@@ -1,1 +1,1 @@
-Risorse utili per tirocinio.
+Risorse utili per Tirocinio.
