@@ -20,7 +20,7 @@ def main(URL):
     content = driver.page_source
     soup = BeautifulSoup(content,features="html.parser") #parsing
     elements = []
-    for a in soup.select("h1"):
+    for a in soup.select('a[href]'):
         elements.append(a)
     driver.close()
     print(elements)
