@@ -3,6 +3,7 @@ from click import option
 from numpy import extract
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
+from sqlalchemy import false
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import urllib.parse as up
@@ -14,9 +15,9 @@ class Scraper():
     _currentUrl = None
     _soup = None
     _extracted = set()
-    _visitedWebsites = []
     _webstack = deque()
     _blockedExt = (".pdf")
+    _visitedWebsites = {}
     
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False):
@@ -53,18 +54,29 @@ class Scraper():
         content = self._driver.page_source
         soup = BeautifulSoup(content,features="html.parser")
         unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
-        return unfilteredLinks
+        return self._filterLinks(unfilteredLinks,url)
 
     def _filterLinks(self,urls,currentUrl):
         filteredUrls = []
         for url in urls:
             if url.startswith("#"):
                 pass
-            elif url.startswith("/") :
-                filteredUrls.append(currentUrl + url)
+            elif url.startswith("/"):
+                if currentUrl.endswith("/"):
+                    filteredUrls.append(currentUrl + url[1:])
+                else:
+                    filteredUrls.append(currentUrl + url)
             elif  url.startswith(currentUrl):
                 filteredUrls.append(url)
-        return filteredUrls
+        urlsNotVisited = []
+        for link in filteredUrls:
+            if self.checkVisited(link):
+                if self._debug:
+                    print("skipping already visited: "+link)
+                continue
+            else:
+                urlsNotVisited.append(link)
+        return urlsNotVisited
     
     def _get(self,url:str):
         if url.endswith(self._blockedExt):
@@ -97,13 +109,23 @@ class Scraper():
     def getWebstack(self):
         return self._webstack
 
+    def checkVisited(self,url):
+        if url in self._visitedWebsites:
+            return True
+        else:
+            return False
+
+    def _updateVisited(self,url):
+        self._visitedWebsites[url] = None
+
+
     def _scrape(self,link,depth,cssSelector=None,attr=None):
         if self._debug:
-            print("scraping :"+link)
-        self._extract(link,cssSelector,attr)
+            print("scraping :"+link+" depth= " + str(depth))
         if depth == 0:
             return 
-        for v in self._filterLinks(self._extractLinks(link),link):
+        self._extract(link,cssSelector,attr)
+        for v in self._extractLinks(link):
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
             if(vparse.hostname != currentparse.hostname):
@@ -111,32 +133,33 @@ class Scraper():
                 if  self._webstack.count(site) == 0:
                     self._webstack.append(site)
             else : 
+                #ritornare subito se depth-1 è 0?
                 self._scrape(v,depth-1,cssSelector,attr)
 
     def pingWebsite(self,site):
         return os.system("ping -c 1 "+site) == 0
     
     def scrapeWebsite(self,website,cssSelector,attr=None,depth=1):
-        if website[-1] == "/":
-            website = website[:-1]
+        #if website[-1] == "/":
+        #    website = website[:-1]
         if not self.pingWebsite(up.urlparse(website).hostname):
             return 
         self._webstack.append(website)
         while len(self._webstack) != 0:
             next = self._webstack.popleft()
+            if self.checkVisited(website):
+                if self._debug:
+                    print("skip visited website "+website)
+                continue
+            self._updateVisited(website)
             if self._debug :
                 print("scraping website: " + next)
             self._scrape(next,depth,cssSelector,attr)
 
 
-
-
-
-
 if __name__ == "__main__":
     scraper = Scraper(debug=True)
-    scraper.scrapeWebsite("https://vargiuweb.it","title")
-    
+    scraper.scrapeWebsite("https://vargiuweb.it","title",depth=1)
     print(scraper.getExtracted())
     #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
 
