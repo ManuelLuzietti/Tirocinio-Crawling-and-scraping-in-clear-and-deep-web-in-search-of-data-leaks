@@ -18,12 +18,14 @@ class Scraper():
     _webstack = deque()
     _blockedExt = (".pdf")
     _visitedWebsites = {}
+    _visitedLinks = {}
     
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False):
         self._options = webdriver.ChromeOptions()
         prefs = {
-            "download_restrictions": 3,
+            #"download_restrictions": 3
+            "profile.managed_default_content_settings.images": 2
         }
         self._options.add_experimental_option(
             "prefs", prefs
@@ -36,7 +38,7 @@ class Scraper():
             self._options.add_argument('user-agent='+useragent)
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
-            self._driver = webdriver.Chrome(options=self._options,service=Service(ChromeDriverManager().install()))
+            self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         self._debug = debug
     '''def scrapeUrl(self,url,cssSelector=None,attr=None):
         if url is None:
@@ -115,6 +117,12 @@ class Scraper():
         else:
             return False
 
+    def _checkVisitedLink(self,url):
+        if url in self._visitedLinks:
+            return True
+        else:
+            return False
+
     def _updateVisited(self,url):
         self._visitedWebsites[url] = None
 
@@ -122,18 +130,26 @@ class Scraper():
     def _scrape(self,link,depth,cssSelector=None,attr=None):
         if self._debug:
             print("scraping :"+link+" depth= " + str(depth))
-        if depth == 0:
+        #estrae contenuto
+        if self._checkVisitedLink(link):
+            if self._debug:
+                print("skipping visited Link: "+link)
             return 
         self._extract(link,cssSelector,attr)
+        if depth == 0:
+            return 
+        #per ogni link estratto
         for v in self._extractLinks(link):
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
+            #se link è ref fuori dal dominio
             if(vparse.hostname != currentparse.hostname):
                 site = vparse[0]+vparse[1]
+                #se sito non già in stack da visitare
                 if  self._webstack.count(site) == 0:
                     self._webstack.append(site)
             else : 
-                #ritornare subito se depth-1 è 0?
+                #se link interno a dominio vado di scrape
                 self._scrape(v,depth-1,cssSelector,attr)
 
     def pingWebsite(self,site):
