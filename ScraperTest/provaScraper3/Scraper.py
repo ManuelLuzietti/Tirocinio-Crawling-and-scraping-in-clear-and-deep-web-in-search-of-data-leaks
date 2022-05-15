@@ -4,7 +4,6 @@ from numpy import extract
 import regex
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from sqlalchemy import false
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import urllib.parse as up
@@ -22,13 +21,14 @@ class Scraper():
     _visitedWebsites = {}
     _visitedLinks = {}
     _leaks = []
+    _blockedWebsites = set()
     
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False):
         self._options = webdriver.ChromeOptions()
         prefs = {
             #"download_restrictions": 3
-            "profile.managed_default_content_settings.images": 2
+            #"profile.managed_default_content_settings.images": 2
         }
         self._options.add_experimental_option(
             "prefs", prefs
@@ -41,14 +41,10 @@ class Scraper():
             self._options.add_argument('user-agent='+useragent)
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
-            self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        self._options.add_argument("--enable-javascript")
+        self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+
         self._debug = debug
-    '''def scrapeUrl(self,url,cssSelector=None,attr=None):
-        if url is None:
-            return 
-        self._currentUrl = url if url[-1]!= "/" else url[:-1]
-        links = self._filteredLinks(self._extractLinks(url),self._currentUrl)
-        self._extract(cssSelector,attr)'''
 
         
     def _extractLinks(self,url):
@@ -106,6 +102,12 @@ class Scraper():
         if not self._get(url):
             return 
         content = self._driver.page_source
+        if re.search("[cC]loud[fF]lare",content) != None:
+            self._blockedWebsites.add(url)
+            if self._debug:
+                print("blocked website by cloudflare: "+url)
+            return
+        #print(content) #da togliere, mostra sorgente pagina
         if regex!= None:
             self._regexSearch(url,content,regex)
         if cssSelector != None:
@@ -113,7 +115,7 @@ class Scraper():
             content = soup.select(cssSelector)
             if attr != None:
                 try:
-                    self._extracted.add(self._extracted + [element[attr] for element in content])
+                    self._extrsacted.add(self._extracted + [element[attr] for element in content])
                 except:
                     self._extracted.add(self._extracted + content)    
             else:
@@ -152,7 +154,7 @@ class Scraper():
         if depth == 0:
             return 
         #per ogni link estratto
-        print(self._extractLinks(link)) #<-da togliere
+        #print(self._extractLinks(link)) #<-da togliere per vedere link estratti da ogni pagina
         for v in self._extractLinks(link):
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
@@ -188,9 +190,11 @@ class Scraper():
 
 
 if __name__ == "__main__":
-    scraper = Scraper(debug=True,headless=False)
+    scraper = Scraper(debug=True,headless=False,tor=True)
     #scraper.scrapeWebsite("https://vargiuweb.it","title",depth=0,regex="semplice")
     #print(scraper.getExtracted())
     #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
-    scraper.scrapeWebsite("https://www.nulled.to/",depth=5,regex="Yahoo Accounts")
+    #scraper.scrapeWebsite("https://www.nulled.to/",depth=5,regex="Yahoo Accounts")
+    scraper.scrapeWebsite("https://www.google.com/search?q=leaks+forum&oq=leaks+forum+&aqs=chrome..69i57j0i22i30l8j0i10i15i22i30.2335j1j7&sourceid=chrome&ie=UTF-8",depth=2
+        ,regex="[Yy]ahoo.*leaks?")
     print(scraper.getVisited())
