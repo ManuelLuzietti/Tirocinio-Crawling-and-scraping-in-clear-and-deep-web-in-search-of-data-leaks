@@ -1,6 +1,7 @@
 from collections import deque
 from click import option
 from numpy import extract
+import regex
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from sqlalchemy import false
@@ -8,6 +9,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import urllib.parse as up
 from collections import deque
+import re
 import os 
 class Scraper():
     _options = None
@@ -19,6 +21,7 @@ class Scraper():
     _blockedExt = (".pdf")
     _visitedWebsites = {}
     _visitedLinks = {}
+    _leaks = []
     
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False):
@@ -88,28 +91,39 @@ class Scraper():
         else:
             self._driver.get(url)
             return True
+    
+    def _regexSearch(self,url,content,regex):
+        result = re.search(regex,content)
+        if result != None:
+            self._leaks.append(url)
+            if self._debug:
+                print("found pattern match in: "+url)
 
-    def _extract(self,url,cssSelector=None,attr=None):
-        if cssSelector == None:
+
+    def _extract(self,url,cssSelector=None,attr=None,regex=None):
+        if cssSelector == None and regex==None:
             return 
         if not self._get(url):
             return 
         content = self._driver.page_source
-        soup = BeautifulSoup(content,features="html.parser")
-        content = soup.select(cssSelector)
-        if attr != None:
-            try:
-                self._extracted.add(self._extracted + [element[attr] for element in content])
-            except:
-                self._extracted.add(self._extracted + content)    
-        else:
-            self._extracted = self._extracted | set(content) 
+        if regex!= None:
+            self._regexSearch(url,content,regex)
+        if cssSelector != None:
+            soup = BeautifulSoup(content,features="html.parser")
+            content = soup.select(cssSelector)
+            if attr != None:
+                try:
+                    self._extracted.add(self._extracted + [element[attr] for element in content])
+                except:
+                    self._extracted.add(self._extracted + content)    
+            else:
+                self._extracted = self._extracted | set(content) 
 
     def getExtracted(self):
         return self._extracted
 
-    def getWebstack(self):
-        return self._webstack
+    def getVisited(self):
+        return self._visitedLinks.keys() | self._visitedWebsites.keys()
 
     def checkVisited(self,url):
         if url in self._visitedWebsites:
@@ -126,8 +140,7 @@ class Scraper():
     def _updateVisited(self,url):
         self._visitedWebsites[url] = None
 
-
-    def _scrape(self,link,depth,cssSelector=None,attr=None):
+    def _scrape(self,link,depth,cssSelector=None,attr=None,regex=None):
         if self._debug:
             print("scraping :"+link+" depth= " + str(depth))
         #estrae contenuto
@@ -135,10 +148,11 @@ class Scraper():
             if self._debug:
                 print("skipping visited Link: "+link)
             return 
-        self._extract(link,cssSelector,attr)
+        self._extract(link,cssSelector,attr,regex)  
         if depth == 0:
             return 
         #per ogni link estratto
+        print(self._extractLinks(link)) #<-da togliere
         for v in self._extractLinks(link):
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
@@ -155,7 +169,7 @@ class Scraper():
     def pingWebsite(self,site):
         return os.system("ping -c 1 "+site) == 0
     
-    def scrapeWebsite(self,website,cssSelector,attr=None,depth=1):
+    def scrapeWebsite(self,website,cssSelector=None,attr=None,depth=1,regex=None):
         #if website[-1] == "/":
         #    website = website[:-1]
         if not self.pingWebsite(up.urlparse(website).hostname):
@@ -170,12 +184,13 @@ class Scraper():
             self._updateVisited(website)
             if self._debug :
                 print("scraping website: " + next)
-            self._scrape(next,depth,cssSelector,attr)
+            self._scrape(next,depth,cssSelector,attr,regex)
 
 
 if __name__ == "__main__":
-    scraper = Scraper(debug=True)
-    scraper.scrapeWebsite("https://vargiuweb.it","title",depth=1)
-    print(scraper.getExtracted())
+    scraper = Scraper(debug=True,headless=False)
+    #scraper.scrapeWebsite("https://vargiuweb.it","title",depth=0,regex="semplice")
+    #print(scraper.getExtracted())
     #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
-
+    scraper.scrapeWebsite("https://www.nulled.to/",depth=5,regex="Yahoo Accounts")
+    print(scraper.getVisited())
