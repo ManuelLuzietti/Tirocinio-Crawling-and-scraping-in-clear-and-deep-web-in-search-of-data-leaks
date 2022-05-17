@@ -1,7 +1,4 @@
 from collections import deque
-from click import option
-from numpy import extract
-import regex
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -26,9 +23,10 @@ class Scraper():
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False):
         self._options = webdriver.ChromeOptions()
+        #da decommentare:
         prefs = {
             #"download_restrictions": 3
-            #"profile.managed_default_content_settings.images": 2
+            #"profile.managed_default_content_settings.images": 2 
         }
         self._options.add_experimental_option(
             "prefs", prefs
@@ -70,12 +68,17 @@ class Scraper():
                     filteredUrls.append(currentUrl + url)
             elif  url.startswith(currentUrl):
                 filteredUrls.append(url)
-            else:
+            elif url.startswith("http") or url.startswith("https"):
                 self._webstack.append(url)
                 if self._debug :
                     print("aggiunto sito a webstack: "+ url)
                     print("lunghezza webstack: "+str(len(self._webstack)))
-        urlsNotVisited = []
+            elif not url.startswith("/"):
+                if currentUrl.endswith("/"):
+                    filteredUrls.append(currentUrl+url)
+                else:
+                    filteredUrls.append(currentUrl+"/"+url)
+            urlsNotVisited = []
         for link in filteredUrls:
             if self.checkVisited(link):
                 if self._debug:
@@ -185,7 +188,6 @@ class Scraper():
                 return 
         self._webstack.append(website)
         while len(self._webstack) > 0:
-            
             next = self._webstack.popleft()
             if self.checkVisited(next):
                 if self._debug:
