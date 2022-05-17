@@ -55,6 +55,7 @@ class Scraper():
         content = self._driver.page_source
         soup = BeautifulSoup(content,features="html.parser")
         unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
+        #print(unfilteredLinks)#da togliere
         return self._filterLinks(unfilteredLinks,url)
 
     def _filterLinks(self,urls,currentUrl):
@@ -69,6 +70,11 @@ class Scraper():
                     filteredUrls.append(currentUrl + url)
             elif  url.startswith(currentUrl):
                 filteredUrls.append(url)
+            else:
+                self._webstack.append(url)
+                if self._debug :
+                    print("aggiunto sito a webstack: "+ url)
+                    print("lunghezza webstack: "+str(len(self._webstack)))
         urlsNotVisited = []
         for link in filteredUrls:
             if self.checkVisited(link):
@@ -172,18 +178,20 @@ class Scraper():
         return os.system("ping -c 1 "+site) == 0
     
     def scrapeWebsite(self,website,cssSelector=None,attr=None,depth=1,regex=None):
-        #if website[-1] == "/":
-        #    website = website[:-1]
-        if not self.pingWebsite(up.urlparse(website).hostname):
-            return 
+        if website[-1] == "/":
+            website = website[:-1]
+        if not website.endswith(".onion"):
+            if not self.pingWebsite(up.urlparse(website).hostname):
+                return 
         self._webstack.append(website)
-        while len(self._webstack) != 0:
+        while len(self._webstack) > 0:
+            
             next = self._webstack.popleft()
-            if self.checkVisited(website):
+            if self.checkVisited(next):
                 if self._debug:
                     print("skip visited website "+website)
                 continue
-            self._updateVisited(website)
+            self._updateVisited(next)
             if self._debug :
                 print("scraping website: " + next)
             self._scrape(next,depth,cssSelector,attr,regex)
@@ -195,6 +203,9 @@ if __name__ == "__main__":
     #print(scraper.getExtracted())
     #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
     #scraper.scrapeWebsite("https://www.nulled.to/",depth=5,regex="Yahoo Accounts")
-    scraper.scrapeWebsite("https://www.google.com/search?q=leaks+forum&oq=leaks+forum+&aqs=chrome..69i57j0i22i30l8j0i10i15i22i30.2335j1j7&sourceid=chrome&ie=UTF-8",depth=2
-        ,regex="[Yy]ahoo.*leaks?")
+    #scraper.scrapeWebsite("https://www.google.com/search?q=leaks+forum&oq=leaks+forum+&aqs=chrome..69i57j0i22i30l8j0i10i15i22i30.2335j1j7&sourceid=chrome&ie=UTF-8",depth=1
+    #    ,regex="[Yy]ahoo.*leaks?")
+    #scraper.scrapeWebsite("https://www.whatsmyip.org/",regex="[cC]ocaine")
+    scraper.scrapeWebsite("https://thehiddenwiki.org/","title",regex="[cC]ocaine",depth=1)
+
     print(scraper.getVisited())
