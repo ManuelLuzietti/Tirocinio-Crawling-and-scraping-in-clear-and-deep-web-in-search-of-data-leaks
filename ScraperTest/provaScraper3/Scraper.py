@@ -1,5 +1,6 @@
 from collections import deque
-from selenium import webdriver
+#from selenium import webdriver
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
@@ -7,6 +8,7 @@ import urllib.parse as up
 from collections import deque
 import re
 import os 
+
 class Scraper():
     _options = None
     _driver = None
@@ -31,16 +33,23 @@ class Scraper():
         self._options.add_experimental_option(
             "prefs", prefs
         )
+        sw_options = None
         if headless:
             self._options.add_argument("--headless")
         if tor:
+            sw_options = {
+                'proxy':    {
+                            'http':"socks5h://127.0.0.1:9050",
+                            'https':"socks5h://127.0.0.1:9050"
+                            }
+            }
             self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
         if useragent != "default":
             self._options.add_argument('user-agent='+useragent)
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
         self._options.add_argument("--enable-javascript")
-        self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        self._driver = webdriver.Chrome(seleniumwire_options=sw_options,chrome_options=self._options,service=Service(ChromeDriverManager().install()))
 
         self._debug = debug
 
@@ -200,7 +209,7 @@ class Scraper():
 
 
 if __name__ == "__main__":
-    scraper = Scraper(debug=True,headless=False,tor=True)
+    scraper = Scraper(debug=True,headless=False,tor=False)
     #scraper.scrapeWebsite("https://vargiuweb.it","title",depth=0,regex="semplice")
     #print(scraper.getExtracted())
     #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
@@ -208,6 +217,10 @@ if __name__ == "__main__":
     #scraper.scrapeWebsite("https://www.google.com/search?q=leaks+forum&oq=leaks+forum+&aqs=chrome..69i57j0i22i30l8j0i10i15i22i30.2335j1j7&sourceid=chrome&ie=UTF-8",depth=1
     #    ,regex="[Yy]ahoo.*leaks?")
     #scraper.scrapeWebsite("https://www.whatsmyip.org/",regex="[cC]ocaine")
-    scraper.scrapeWebsite("https://thehiddenwiki.org/","title",regex="[cC]ocaine",depth=1)
-
+    #scraper.scrapeWebsite("http://s4k4ceiapwwgcm3mkb6e4diqecpo7kvdnfr5gg7sph7jjppqkvwwqtyd.onion/","title",regex="[cC]ocaine",depth=1)
+    #scraper._driver.get("https://www.whatismybrowser.com/detect/is-javascript-enabled")
+    #scraper.scrapeWebsite("https://www.google.com/search?q=forum+data+leaks&client=firefox-b-e&sxsrf=ALiCzsYiGc8WgUKh7iDX3TA8aml_r3V0kQ%3A1652967709767&ei=HUmGYrTALs-Uxc8PvuOJmAI&ved=0ahUKEwj0wqnJ2Ov3AhVPSvEDHb5xAiMQ4dUDCA0&uact=5&oq=forum+data+leaks&gs_lcp=Cgdnd3Mtd2l6EAM6BggjECcQEzoECCMQJzoRCC4QgAQQsQMQgwEQxwEQ0QM6CAgAELEDEIMBOggILhCxAxCDAToICC4QgAQQsQM6BQguEIAEOgcILhCxAxBDOgQIABBDOgoILhCxAxDUAhBDOgsIABCABBCxAxCDAToLCC4QgAQQxwEQrwE6EQguEIAEELEDEIMBEMcBEK8BOg4ILhCABBCxAxDHARCvAToFCAAQgAQ6CwguEIAEEMcBENEDOgUIABDLAToGCAAQHhAWOggIABAeEA8QFkoECEEYAEoECEYYAFDsGFiLJWDDJmgDcAF4AIABlgGIAYwNkgEDOC44mAEAoAEBwAEB&sclient=gws-wiz",
+    #   "title")
+    #scraper._driver.get("https://www.google.com/search?q=forum+data+leaks&client=firefox-b-e&sxsrf=ALiCzsYiGc8WgUKh7iDX3TA8aml_r3V0kQ%3A1652967709767&ei=HUmGYrTALs-Uxc8PvuOJmAI&ved=0ahUKEwj0wqnJ2Ov3AhVPSvEDHb5xAiMQ4dUDCA0&uact=5&oq=forum+data+leaks&gs_lcp=Cgdnd3Mtd2l6EAM6BggjECcQEzoECCMQJzoRCC4QgAQQsQMQgwEQxwEQ0QM6CAgAELEDEIMBOggILhCxAxCDAToICC4QgAQQsQM6BQguEIAEOgcILhCxAxBDOgQIABBDOgoILhCxAxDUAhBDOgsIABCABBCxAxCDAToLCC4QgAQQxwEQrwE6EQguEIAEELEDEIMBEMcBEK8BOg4ILhCABBCxAxDHARCvAToFCAAQgAQ6CwguEIAEEMcBENEDOgUIABDLAToGCAAQHhAWOggIABAeEA8QFkoECEEYAEoECEYYAFDsGFiLJWDDJmgDcAF4AIABlgGIAYwNkgEDOC44mAEAoAEBwAEB&sclient=gws-wiz")
+    scraper._driver.get("https://nulled.to")
     print(scraper.getVisited())
