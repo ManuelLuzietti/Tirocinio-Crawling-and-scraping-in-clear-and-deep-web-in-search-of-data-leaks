@@ -7,7 +7,10 @@ import urllib.parse as up
 from collections import deque
 import re
 import os 
-class Scraper():
+from threading import *
+import time
+from RepeatTimer import RepeatTimer
+class Scraper(Thread):
     _options = None
     _driver = None
     _currentUrl = None
@@ -19,9 +22,33 @@ class Scraper():
     _visitedLinks = {}
     _leaks = []
     _blockedWebsites = set()
+    _timer = None
+
+    def _pause(self):
+        self.__flag.clear()
+    def _resume(self):
+        self.__flag.set()
+    def _stop(self):
+        self.__flag.clear()
+        self.__running.clear()
+    def _timerFunc(self):
+        if not self._timerFlag.is_set():
+            self._timerFlag.set()
+
+    def setTimeoutForRequests(self,interval):
+        self._interval = interval
+        self._timerFlag = Event()
+        self._timer = RepeatTimer(interval,self._timerFunc)
+        self._timer.start()
     
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False):
+        Thread.__init__(self)
+        self.__flag = Event()
+        self.__flag.set()
+        self.__running = Event()
+        self.__running.set()
+
         self._options = webdriver.ChromeOptions()
         #da decommentare:
         prefs = {
@@ -47,9 +74,9 @@ class Scraper():
         
     def _extractLinks(self,url):
         if url is None:
-            return
+            return []
         if not self._get(url):
-            return 
+            return []
         content = self._driver.page_source
         soup = BeautifulSoup(content,features="html.parser")
         unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
@@ -78,7 +105,7 @@ class Scraper():
                     filteredUrls.append(currentUrl+url)
                 else:
                     filteredUrls.append(currentUrl+"/"+url)
-            urlsNotVisited = []
+        urlsNotVisited = []
         for link in filteredUrls:
             if self.checkVisited(link):
                 if self._debug:
@@ -89,13 +116,20 @@ class Scraper():
         return urlsNotVisited
     
     def _get(self,url:str):
-        if url.endswith(self._blockedExt):
-            if self._debug :
-                print("blocked "+url)
-            return False
-        else:
-            self._driver.get(url)
-            return True
+        if self._timer is not  None:
+            self._timerFlag.wait()
+            self._timerFlag.clear()
+            print("get request")
+        try:
+            if url.endswith(self._blockedExt):
+                if self._debug :
+                    print("blocked "+url)
+                return False
+            else:
+                self._driver.get(url)
+                return True
+        except Exception:
+            print("can't resolve "+ url)
     
     def _regexSearch(self,url,content,regex):
         result = re.search(regex,content)
@@ -152,6 +186,9 @@ class Scraper():
         self._visitedWebsites[url] = None
 
     def _scrape(self,link,depth,cssSelector=None,attr=None,regex=None):
+        if not self.__running.is_set():
+            return
+        self.__flag.wait()
         if self._debug:
             print("scraping :"+link+" depth= " + str(depth))
         #estrae contenuto
@@ -165,6 +202,9 @@ class Scraper():
         #per ogni link estratto
         #print(self._extractLinks(link)) #<-da togliere per vedere link estratti da ogni pagina
         for v in self._extractLinks(link):
+            if not self.__running.is_set():
+                return 
+            self.__flag.wait()
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
             #se link è ref fuori dal dominio
@@ -187,7 +227,8 @@ class Scraper():
             if not self.pingWebsite(up.urlparse(website).hostname):
                 return 
         self._webstack.append(website)
-        while len(self._webstack) > 0:
+        while len(self._webstack) > 0 and self.__running.is_set():
+            self.__flag.wait()
             next = self._webstack.popleft()
             if self.checkVisited(next):
                 if self._debug:
@@ -197,10 +238,15 @@ class Scraper():
             if self._debug :
                 print("scraping website: " + next)
             self._scrape(next,depth,cssSelector,attr,regex)
+        if self._timer is not None:
+            self._timer.cancel()
 
+    def run(self):
+        self.scrapeWebsite("https://vargiuweb.it",regex="semplice")
+        
 
 if __name__ == "__main__":
-    scraper = Scraper(debug=True,headless=False,tor=True)
+    scraper = Scraper(debug=True,headless=False,tor=False)
     #scraper.scrapeWebsite("https://vargiuweb.it","title",depth=0,regex="semplice")
     #print(scraper.getExtracted())
     #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
@@ -208,5 +254,10 @@ if __name__ == "__main__":
     #scraper.scrapeWebsite("https://www.google.com/search?q=leaks+forum&oq=leaks+forum+&aqs=chrome..69i57j0i22i30l8j0i10i15i22i30.2335j1j7&sourceid=chrome&ie=UTF-8",depth=1
     #    ,regex="[Yy]ahoo.*leaks?")
     #scraper.scrapeWebsite("https://www.whatsmyip.org/",regex="[cC]ocaine")
-    scraper.scrapeWebsite("https://thehiddenwiki.org/","title",regex="[cC]ocaine",depth=1)
-    print(scraper.getVisited())
+    #scraper.scrapeWebsite("https://thehiddenwiki.org/","title",regex="[cC]ocaine",depth=1)
+    #print(scraper.getVisited())
+    scraper.setTimeoutForRequests(3.0)
+    scraper.start()
+
+        
+    
