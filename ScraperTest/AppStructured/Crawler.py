@@ -10,7 +10,7 @@ import os
 from threading import *
 import time
 from RepeatTimer import RepeatTimer
-class Scraper(Thread):
+class Crawler(Thread):
     _options = None
     _driver = None
     _currentUrl = None
@@ -217,7 +217,7 @@ class Scraper(Thread):
     def pingWebsite(self,site):
         return os.system("ping -c 1 "+site) == 0
     
-    def scrapeWebsite(self,website,cssSelector=None,attr=None,depth=1,regex=None):
+    def crawlWebsite(self,website,cssSelector=None,attr=None,depth=1,regex=None):
         if website[-1] == "/":
             website = website[:-1]
         if not website.endswith(".onion"):
@@ -239,22 +239,12 @@ class Scraper(Thread):
             self._timer.cancel()
 
     def run(self):
-        self.scrapeWebsite("https://vargiuweb.it",regex="semplice")
-        
-
-if __name__ == "__main__":
-    scraper = Scraper(debug=True,headless=False,tor=False)
-    #scraper.scrapeWebsite("https://vargiuweb.it","title",depth=0,regex="semplice")
-    #print(scraper.getExtracted())
-    #print(up.urlparse("https://ciao.vargiweb.it/").hostname)
-    #scraper.scrapeWebsite("https://www.nulled.to/",depth=5,regex="Yahoo Accounts")
-    #scraper.scrapeWebsite("https://www.google.com/search?q=leaks+forum&oq=leaks+forum+&aqs=chrome..69i57j0i22i30l8j0i10i15i22i30.2335j1j7&sourceid=chrome&ie=UTF-8",depth=1
-    #    ,regex="[Yy]ahoo.*leaks?")
-    #scraper.scrapeWebsite("https://www.whatsmyip.org/",regex="[cC]ocaine")
-    #scraper.scrapeWebsite("https://thehiddenwiki.org/","title",regex="[cC]ocaine",depth=1)
-    #print(scraper.getVisited())
-    scraper.setTimeoutForRequests(3.0)
-    scraper.start()
-
-        
+        self.scrapeWebsite(self.website,self.cssSelector,self.attr,self.depth,self.regex)
     
+    def setScraperConfig(self,website,cssSelector=None,attr=None,depth=1,regex=None):
+        self.website = website
+        self.cssSelector = cssSelector
+        self.attr = self.attr
+        self.depth = depth
+        self.regex = regex
+
