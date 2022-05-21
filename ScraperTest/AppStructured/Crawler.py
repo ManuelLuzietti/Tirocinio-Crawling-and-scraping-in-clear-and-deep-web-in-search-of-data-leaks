@@ -1,15 +1,15 @@
 from collections import deque
+import traceback
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from bs4 import BeautifulSoup
 import urllib.parse as up
 from collections import deque
-import re
 import os 
 from threading import *
-import time
 from RepeatTimer import RepeatTimer
+from Scraper import Scraper
+
 class Crawler(Thread):
     _options = None
     _driver = None
@@ -48,6 +48,7 @@ class Crawler(Thread):
         self.__flag.set()
         self.__running = Event()
         self.__running.set()
+        self._scraper = Scraper()
 
         self._options = webdriver.ChromeOptions()
         #da decommentare:
@@ -73,12 +74,12 @@ class Crawler(Thread):
 
         
     def _extractLinks(self,url,content):
-        if content is None:
-            return []
-        soup = BeautifulSoup(content,features="html.parser")
-        unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
-        #print(unfilteredLinks)#da togliere
-        return self._filterLinks(unfilteredLinks,url)
+        # if content is None:
+        #     return []
+        # soup = BeautifulSoup(content,features="html.parser")
+        # unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
+        links = self._scraper.getLinks(content)
+        return self._filterLinks(links,url)
 
     def _filterLinks(self,urls,currentUrl):
         filteredUrls = []
@@ -125,11 +126,13 @@ class Crawler(Thread):
             else:
                 self._driver.get(url)
                 return True
-        except Exception:
+        except Exception :
             print("can't resolve "+ url)
+            print(traceback.format_exc())
+
     
     def _regexSearch(self,url,content,regex):
-        result = re.search(regex,content)
+        result = self._scraper.regexSearch(content,regex)
         if result != None:
             self._leaks.append(url)
             if self._debug:
@@ -139,7 +142,7 @@ class Crawler(Thread):
     def _extract(self,url,content,cssSelector=None,attr=None,regex=None):
         if cssSelector == None and regex==None:
             return 
-        if re.search("[cC]loud[fF]lare",content) != None:
+        if self._scraper.regexSearch(content,"[cC]loud[fF]lare") != None:
             self._blockedWebsites.add(url)
             if self._debug:
                 print("blocked website by cloudflare: "+url)
@@ -148,15 +151,8 @@ class Crawler(Thread):
         if regex!= None:
             self._regexSearch(url,content,regex)
         if cssSelector != None:
-            soup = BeautifulSoup(content,features="html.parser")
-            content = soup.select(cssSelector)
-            if attr != None:
-                try:
-                    self._extrsacted.add(self._extracted + [element[attr] for element in content])
-                except:
-                    self._extracted.add(self._extracted + content)    
-            else:
-                self._extracted = self._extracted | set(content) 
+            extracted = self._scraper.getContent(content,cssSelector,attr)
+            self._extracted = self._extracted | extracted
 
     def getExtracted(self):
         return self._extracted
@@ -179,7 +175,7 @@ class Crawler(Thread):
     def _updateVisited(self,url):
         self._visitedWebsites[url] = None
 
-    def _scrape(self,link,depth,cssSelector=None,attr=None,regex=None):
+    def _crawl(self,link,depth,cssSelector=None,attr=None,regex=None):
         if not self.__running.is_set():
             return
         self.__flag.wait()
@@ -212,7 +208,7 @@ class Crawler(Thread):
                     self._webstack.append(site)
             else : 
                 #se link interno a dominio vado di scrape
-                self._scrape(v,depth-1,cssSelector,attr)
+                self._crawl(v,depth-1,cssSelector,attr)
 
     def pingWebsite(self,site):
         return os.system("ping -c 1 "+site) == 0
@@ -234,17 +230,24 @@ class Crawler(Thread):
             self._updateVisited(next)
             if self._debug :
                 print("scraping website: " + next)
-            self._scrape(next,depth,cssSelector,attr,regex)
+            self._crawl(next,depth,cssSelector,attr,regex)
         if self._timer is not None:
             self._timer.cancel()
 
     def run(self):
-        self.scrapeWebsite(self.website,self.cssSelector,self.attr,self.depth,self.regex)
+        self.crawlWebsite(self.website,self.cssSelector,self.attr,self.depth,self.regex)
     
     def setScraperConfig(self,website,cssSelector=None,attr=None,depth=1,regex=None):
         self.website = website
         self.cssSelector = cssSelector
-        self.attr = self.attr
+        self.attr = attr
         self.depth = depth
         self.regex = regex
 
+
+
+
+if __name__=="__main__":
+    crawler = Crawler(False,True,debug=True)
+    crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?")
+    crawler.start()
