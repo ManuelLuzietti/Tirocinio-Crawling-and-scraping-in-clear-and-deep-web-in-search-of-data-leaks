@@ -61,15 +61,16 @@ class Crawler(Thread):
         )
         if headless:
             self._options.add_argument("--headless")
-        if tor:
-            self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
+        # if tor:
+        #     self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
         if useragent != "default":
             self._options.add_argument('user-agent='+useragent)
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
         self._options.add_argument("--enable-javascript")
         self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
-
+        self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
+        self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         self._debug = debug
 
         
@@ -124,7 +125,13 @@ class Crawler(Thread):
                     print("blocked "+url)
                 return False
             else:
-                self._driver.get(url)
+                if url.find(".onion") != -1:
+                    self._driverTor.get(url)
+                    self._lastVisitedPageSource = self._driverTor.page_source
+                else:
+                    self._driver.get(url)
+                    self._lastVisitedPageSource = self._driver.page_source
+
                 return True
         except Exception :
             print("can't resolve "+ url)
@@ -188,7 +195,7 @@ class Crawler(Thread):
             return 
         if not self._get(link):
             return 
-        content = self._driver.page_source
+        content = self._lastVisitedPageSource
         self._extract(link,content,cssSelector,attr,regex)  
         if depth == 0:
             return 
