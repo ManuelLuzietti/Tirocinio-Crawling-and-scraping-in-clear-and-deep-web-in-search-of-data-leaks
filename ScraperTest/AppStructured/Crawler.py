@@ -145,7 +145,7 @@ class Crawler(Thread):
         result = self._scraper.regexSearch(content,regex)
         if result != None:
             # self._leaks.append(url)
-            self._manager.addLeak("url")
+            self._manager.addLeak(url)
             if self._debug:
                 print("found pattern match in: "+url)
 
@@ -154,7 +154,8 @@ class Crawler(Thread):
         if cssSelector == None and regex==None:
             return 
         if self._scraper.regexSearch(content,"[cC]loud[fF]lare") != None:
-            self._blockedWebsites.add(url)
+            #self._blockedWebsites.add(url)
+            self._manager.addBlockedWebsite(url)
             if self._debug:
                 print("blocked website by cloudflare: "+url)
             return
