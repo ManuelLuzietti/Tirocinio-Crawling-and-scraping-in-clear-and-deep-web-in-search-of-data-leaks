@@ -44,6 +44,7 @@ class DBManager:
         return self._byteSetToStringSet(self._db.smembers("extractedContent"))
 
     def addToWebsiteQueue(self,website):
+        self._db.sadd("websiteSet",website)
         return self._db.rpush("websiteQueue",website)
 
     def getFromWebsiteQueue(self):
@@ -51,12 +52,18 @@ class DBManager:
         if value is None:
             return value
         else:
+            self._db.srem("websiteSet",value)
             return value.decode("utf-8")
+    
+    def isWebsiteInQueue(self,website):
+        return self._db.sismember("websiteSet",website) == 1
 
-
+    def isWebsiteQueueEmpty(self):
+        return self._db.exists("websiteQueue") == 0
 
 if __name__ == "__main__":
     manager = DBManager()
     manager.addVisitedLink("ciao.com")
     print(manager.getVisited())
     print(manager.isLinkVisited("ciao.com"))
+    print(manager.isWebsiteQueueEmpty())

@@ -1,4 +1,5 @@
 from collections import deque
+from pickle import FALSE
 import traceback
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -9,20 +10,21 @@ import os
 from threading import *
 from RepeatTimer import RepeatTimer
 from Scraper import Scraper
+from DBManager import DBManager
 
 class Crawler(Thread):
     _options = None
     _driver = None
     _currentUrl = None
     _soup = None
-    _extracted = set()
-    _webstack = deque()
+    #_webstack = deque()
     _blockedExt = (".pdf")
-    _visitedWebsites = {}
-    _visitedLinks = {}
-    _leaks = []
-    _blockedWebsites = set()
+    # _visitedWebsites = {} #
+    # _visitedLinks = {} #
+    # _leaks = [] #
+    # _blockedWebsites = set() #
     _timer = None
+    _manager = None
 
     def _pause(self):
         self.__flag.clear()
@@ -42,7 +44,7 @@ class Crawler(Thread):
         self._timer.start()
     
 
-    def __init__(self,headless=True,tor=True,useragent="default",debug=False):
+    def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0):
         Thread.__init__(self)
         self.__flag = Event()
         self.__flag.set()
@@ -61,27 +63,28 @@ class Crawler(Thread):
         )
         if headless:
             self._options.add_argument("--headless")
-        # if tor:
-        #     self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
+      
         if useragent != "default":
             self._options.add_argument('user-agent='+useragent)
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
         self._options.add_argument("--enable-javascript")
         self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
-        self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
-        self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        if tor:
+            self._tor = True
+            self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
+            self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        else:
+            self._tor = False
         self._debug = debug
+        self._manager = DBManager(db=db)
 
         
     def _extractLinks(self,url,content):
-        # if content is None:
-        #     return []
-        # soup = BeautifulSoup(content,features="html.parser")
-        # unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
         links = self._scraper.getLinks(content)
         return self._filterLinks(links,url)
 
+    #here
     def _filterLinks(self,urls,currentUrl):
         filteredUrls = []
         for url in urls:
@@ -95,10 +98,11 @@ class Crawler(Thread):
             elif  url.startswith(currentUrl):
                 filteredUrls.append(url)
             elif url.startswith("http") or url.startswith("https"):
-                self._webstack.append(url)
+                #self._webstack.append(url)
+                self._manager.addToWebsiteQueue(url)
                 if self._debug :
                     print("aggiunto sito a webstack: "+ url)
-                    print("lunghezza webstack: "+str(len(self._webstack)))
+                    #print("lunghezza webstack: "+str(len(self._webstack)))
             elif not url.startswith("/"):
                 if currentUrl.endswith("/"):
                     filteredUrls.append(currentUrl+url)
@@ -106,7 +110,7 @@ class Crawler(Thread):
                     filteredUrls.append(currentUrl+"/"+url)
         urlsNotVisited = []
         for link in filteredUrls:
-            if self.checkVisited(link):
+            if self._checkVisitedLink(link):
                 if self._debug:
                     print("skipping already visited: "+link)
                 continue
@@ -125,13 +129,12 @@ class Crawler(Thread):
                     print("blocked "+url)
                 return False
             else:
-                if url.find(".onion") != -1:
+                if url.find(".onion") != -1 and self._tor:
                     self._driverTor.get(url)
                     self._lastVisitedPageSource = self._driverTor.page_source
                 else:
                     self._driver.get(url)
                     self._lastVisitedPageSource = self._driver.page_source
-
                 return True
         except Exception :
             print("can't resolve "+ url)
@@ -141,7 +144,8 @@ class Crawler(Thread):
     def _regexSearch(self,url,content,regex):
         result = self._scraper.regexSearch(content,regex)
         if result != None:
-            self._leaks.append(url)
+            # self._leaks.append(url)
+            self._manager.addLeak("url")
             if self._debug:
                 print("found pattern match in: "+url)
 
@@ -154,33 +158,31 @@ class Crawler(Thread):
             if self._debug:
                 print("blocked website by cloudflare: "+url)
             return
-        #print(content) #da togliere, mostra sorgente pagina
         if regex!= None:
             self._regexSearch(url,content,regex)
         if cssSelector != None:
             extracted = self._scraper.getContent(content,cssSelector,attr)
-            self._extracted = self._extracted | extracted
+            if extracted is not None:
+                self._manager.addExtractedContent([x.string for x in extracted])
 
-    def getExtracted(self):
-        return self._extracted
-
-    def getVisited(self):
-        return self._visitedLinks.keys() | self._visitedWebsites.keys()
 
     def checkVisited(self,url):
-        if url in self._visitedWebsites:
-            return True
-        else:
-            return False
+        # if url in self._visitedWebsites:
+        #     return True
+        # else:
+        #     return False
+        return self._manager.isWebsiteVisited(url)
 
     def _checkVisitedLink(self,url):
-        if url in self._visitedLinks:
-            return True
-        else:
-            return False
+        # if url in self._visitedLinks:
+        #     return True
+        # else:
+        #     return False
+        return self._manager.isLinkVisited(url)
 
     def _updateVisited(self,url):
-        self._visitedWebsites[url] = None
+        # self._visitedWebsites[url] = None
+        self._manager.addVisitedWebsite(url)
 
     def _crawl(self,link,depth,cssSelector=None,attr=None,regex=None):
         if not self.__running.is_set():
@@ -205,14 +207,17 @@ class Crawler(Thread):
             if not self.__running.is_set():
                 return 
             self.__flag.wait()
+            self._manager.addVisitedLink("link")
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
             #se link è ref fuori dal dominio
             if(vparse.hostname != currentparse.hostname):
                 site = vparse[0]+vparse[1]
                 #se sito non già in stack da visitare
-                if  self._webstack.count(site) == 0:
-                    self._webstack.append(site)
+                # if  self._webstack.count(site) == 0:
+                #     self._webstack.append(site)
+                if not self._manager.isWebsiteInQueue(site):
+                    self._manager.addToWebsiteQueue(site)
             else : 
                 #se link interno a dominio vado di scrape
                 self._crawl(v,depth-1,cssSelector,attr)
@@ -226,10 +231,12 @@ class Crawler(Thread):
         if not website.endswith(".onion"):
             if not self.pingWebsite(up.urlparse(website).hostname):
                 return 
-        self._webstack.append(website)
-        while len(self._webstack) > 0 and self.__running.is_set():
+        # self._webstack.append(website)
+        self._manager.addToWebsiteQueue(website)
+        while not self._manager.isWebsiteQueueEmpty() and self.__running.is_set():
             self.__flag.wait()
-            next = self._webstack.popleft()
+            # next = self._webstack.popleft()
+            next = self._manager.getFromWebsiteQueue()
             if self.checkVisited(next):
                 if self._debug:
                     print("skip visited website "+website)
@@ -256,5 +263,5 @@ class Crawler(Thread):
 
 if __name__=="__main__":
     crawler = Crawler(False,True,debug=True)
-    crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?")
+    crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
     crawler.start()
