@@ -1,6 +1,10 @@
 from collections import deque
+from http import cookiejar
+from lib2to3.pgen2 import driver
+from multiprocessing.connection import wait
 from pickle import FALSE
 import traceback
+from pendulum import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -44,6 +48,7 @@ class Crawler(Thread):
         self._timer.start()
     
 
+
     def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0):
         Thread.__init__(self)
         self.__flag = Event()
@@ -55,8 +60,8 @@ class Crawler(Thread):
         self._options = webdriver.ChromeOptions()
         #da decommentare:
         prefs = {
-            #"download_restrictions": 3
-            #"profile.managed_default_content_settings.images": 2 
+            # "download_restrictions": 3,
+            # "profile.managed_default_content_settings.images": 2 
         }
         self._options.add_experimental_option(
             "prefs", prefs
@@ -69,9 +74,18 @@ class Crawler(Thread):
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
         self._options.add_argument("--enable-javascript")
+        #TODO:
+        #self._options.add_argument("user-data-dir=/home/needcaffeine/.config/google-chrome")#here user data dir
+        #self._options.add_argument("profile-directory=Default")
+        
+
         self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         if tor:
             self._tor = True
+            #TODO: 
+            #self._options.arguments[-1]= "user-data-dir=/home/needcaffeine/.config/google-chrome/bho"#here user data dir
+            #self._options.add_argument("profile-directory=Default2")
+
             self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
             self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         else:
@@ -259,10 +273,78 @@ class Crawler(Thread):
         self.depth = depth
         self.regex = regex
 
+    def setCookiesInJar(self,cookieFile=None,cookieList=None):
+        if cookieFile is None and cookieList is None:
+            return 
+        cookies = []
+        if cookieFile is not None:
+            import json
+            with open(cookieFile,"r") as f:
+                strings = f.read()
+            cookies = json.loads(strings)
+        if cookieList is not None:
+            cookies += cookieList
+        self._cookieJar = [cookie for cookie in cookies]
 
+    #una richiesta in più ogni volta che naviga un sito non è il max.
+    def getWithCookie(self,url):
+        domain = up.urlparse(url).hostname
+        cookiesToAdd = []
+        for x in self._cookieJar:
+            if x["domain"].rfind(domain) != -1:
+                cookiesToAdd.append(x)
+        if len(cookiesToAdd) != 0:
+            self._driver.get(url+"/randomUrl")
+            for c in cookiesToAdd:
+                self._driver.add_cookie(c)
+        self._driver.get(url)
+    
+    #un po' lento perchè deve aspettare che carichi la pagina.
+    def initializeCookies(self,timeout=-1):
+        self.setGetTimeout(timeout)
+        for cookie in self._cookieJar:
+            try:
+                self._driver.get("http://"+cookie["domain"])
+                self._driver.add_cookie(cookie)
+            except:
+                print("exception 1")
+            #self._driver.implicitly_wait(1)
+            if self._tor:
+                try:
+                    self._driverTor.get("http://"+cookie["domain"])
+                    self._driverTor.add_cookie(cookie)
+                except:
+                    print("exception 2")
+                #self._driverTor.implicitly_wait(1)
+
+    def clearCookies(self):
+        self._driver.delete_all_cookies()
+        if self._tor:
+            self._driverTor.delete_all_cookies()
+            
+    #TODO: vanno messi i vari try catch per usare questo.
+    def setGetTimeout(self,seconds=-1):
+        crawler._driver.set_page_load_timeout(seconds)
+        if self._tor:
+            crawler._driverTor.set_page_load_timeout(seconds)
 
 
 if __name__=="__main__":
     crawler = Crawler(False,True,debug=True)
-    crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
-    crawler.start()
+    
+    # crawler._driver.get("chrome://version")
+    crawler.setCookiesInJar("/home/needcaffeine/cookieFile.json")
+    crawler.clearCookies()
+    crawler.initializeCookies()
+    crawler._driver.get("https://naruto.forumcommunity.net/")
+
+
+    
+
+
+
+    
+    #crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
+    #print(crawler._driver.get_cookies())
+
+    #crawler.start()
