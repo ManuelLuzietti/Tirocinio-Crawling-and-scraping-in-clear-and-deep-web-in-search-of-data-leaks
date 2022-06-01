@@ -1,26 +1,25 @@
-from collections import deque
-from http import cookiejar
-from lib2to3.pgen2 import driver
 from multiprocessing.connection import wait
 from pickle import FALSE
-import traceback
+from time import sleep
 from pendulum import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import urllib.parse as up
-from collections import deque
 import os 
 from threading import *
 from RepeatTimer import RepeatTimer
 from Scraper import Scraper
 from DBManager import DBManager
+from selenium.webdriver.support.ui import WebDriverWait
 
 class Crawler(Thread):
     _options = None
     _driver = None
     _currentUrl = None
     _soup = None
+    _driver = None
+    _driverTor = None
     #_webstack = deque()
     _blockedExt = (".pdf")
     # _visitedWebsites = {} #
@@ -51,6 +50,9 @@ class Crawler(Thread):
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0):
         Thread.__init__(self)
+        self.setup(headless,tor,useragent,debug,db)
+    
+    def setup(self,headless,tor,useragent,debug,db):
         self.__flag = Event()
         self.__flag.set()
         self.__running = Event()
@@ -79,26 +81,47 @@ class Crawler(Thread):
         self._options.add_argument("profile-directory=Profile")
         
 
-        self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        #self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        
+        
         if tor:
             self._tor = True
+            self._optionsTor = webdriver.ChromeOptions()
+            self._optionsTor.add_experimental_option(
+                "prefs",prefs
+            )
+            if headless:
+                self._optionsTor.add_argument("--headless")
+      
+            if useragent != "default":
+                self._optionsTor.add_argument('user-agent='+useragent)
+            else :
+                self._optionsTor.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
+            self._optionsTor.add_argument("--enable-javascript")
             #TODO: 
-            self._options.arguments[-1]= "user-data-dir=/home/needcaffeine/.config/google-chrome/Profile2"#here user data dir
-            self._options.add_argument("profile-directory=Profile")
+            self._optionsTor.add_argument("user-data-dir=/home/needcaffeine/.config/google-chrome/Profile2")#here user data dir
+            self._optionsTor.add_argument("profile-directory=Profile")
 
-            self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
-            self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+            self._optionsTor.add_argument("--proxy-server=socks5://127.0.0.1:9050")
+            # self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         else:
             self._tor = False
         self._debug = debug
         self._manager = DBManager(db=db)
 
+    def initializeDrivers(self):
+        print("None clearweb")
+        self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
+        if self._tor :
+            print("None deepweb")
+            self._driverTor = webdriver.Chrome(chrome_options=self._optionsTor,service=Service(ChromeDriverManager().install()))
+            
         
+
     def _extractLinks(self,url,content):
         links = self._scraper.getLinks(content)
         return self._filterLinks(links,url)
 
-    #here
     def _filterLinks(self,urls,currentUrl):
         filteredUrls = []
         for url in urls:
@@ -112,11 +135,9 @@ class Crawler(Thread):
             elif  url.startswith(currentUrl):
                 filteredUrls.append(url)
             elif url.startswith("http") or url.startswith("https"):
-                #self._webstack.append(url)
                 self._manager.addToWebsiteQueue(url)
                 if self._debug :
                     print("aggiunto sito a webstack: "+ url)
-                    #print("lunghezza webstack: "+str(len(self._webstack)))
             elif not url.startswith("/"):
                 if currentUrl.endswith("/"):
                     filteredUrls.append(currentUrl+url)
@@ -158,7 +179,6 @@ class Crawler(Thread):
     def _regexSearch(self,url,content,regex):
         result = self._scraper.regexSearch(content,regex)
         if result != None:
-            # self._leaks.append(url)
             self._manager.addLeak(url)
             if self._debug:
                 print("found pattern match in: "+url)
@@ -168,7 +188,6 @@ class Crawler(Thread):
         if cssSelector == None and regex==None:
             return 
         if self._scraper.regexSearch(content,"[cC]loud[fF]lare") != None:
-            #self._blockedWebsites.add(url)
             self._manager.addBlockedWebsite(url)
             if self._debug:
                 print("blocked website by cloudflare: "+url)
@@ -182,21 +201,12 @@ class Crawler(Thread):
 
 
     def checkVisited(self,url):
-        # if url in self._visitedWebsites:
-        #     return True
-        # else:
-        #     return False
         return self._manager.isWebsiteVisited(url)
 
     def _checkVisitedLink(self,url):
-        # if url in self._visitedLinks:
-        #     return True
-        # else:
-        #     return False
         return self._manager.isLinkVisited(url)
 
     def _updateVisited(self,url):
-        # self._visitedWebsites[url] = None
         self._manager.addVisitedWebsite(url)
 
     def _crawl(self,link,depth,cssSelector=None,attr=None,regex=None):
@@ -229,8 +239,6 @@ class Crawler(Thread):
             if(vparse.hostname != currentparse.hostname):
                 site = vparse[0]+vparse[1]
                 #se sito non già in stack da visitare
-                # if  self._webstack.count(site) == 0:
-                #     self._webstack.append(site)
                 if not self._manager.isWebsiteInQueue(site):
                     self._manager.addToWebsiteQueue(site)
             else : 
@@ -246,11 +254,9 @@ class Crawler(Thread):
         if not website.endswith(".onion"):
             if not self.pingWebsite(up.urlparse(website).hostname):
                 return 
-        # self._webstack.append(website)
         self._manager.addToWebsiteQueue(website)
         while not self._manager.isWebsiteQueueEmpty() and self.__running.is_set():
             self.__flag.wait()
-            # next = self._webstack.popleft()
             next = self._manager.getFromWebsiteQueue()
             if self.checkVisited(next):
                 if self._debug:
@@ -303,13 +309,14 @@ class Crawler(Thread):
     def initializeCookies(self,timeout=-1):
         self.setGetTimeout(timeout)
         for cookie in self._cookieJar:
-            try:
-                self._driver.get("http://"+cookie["domain"])
-                self._driver.add_cookie(cookie)
-            except:
-                print("exception 1")
+            if cookie["domain"].rfind(".onion") == -1:
+                try:
+                    self._driver.get("http://"+cookie["domain"])
+                    self._driver.add_cookie(cookie)
+                except:
+                    print("exception 1")
             #self._driver.implicitly_wait(1)
-            if self._tor:
+            elif self._tor:
                 try:
                     self._driverTor.get("http://"+cookie["domain"])
                     self._driverTor.add_cookie(cookie)
@@ -328,13 +335,45 @@ class Crawler(Thread):
         if self._tor:
             crawler._driverTor.set_page_load_timeout(seconds)
 
+    def manualCookieJarSetter(self):
+        self.initializeDrivers()
+        WebDriverWait(crawler._driver,10000).until_not(ff)
+        if self._tor:
+            WebDriverWait(crawler._driverTor,10000).until_not(ff)
+    
+    def closeDrivers(self):
+        self._driver.quit()
+        if self._tor:
+            self._driverTor.quit()
 
+def ff(driver):
+    try:
+        driver.get_window_position()
+        return True
+    except:
+        return False
+    
 if __name__=="__main__":
     crawler = Crawler(False,True,debug=True)
-    
-    # crawler._driver.get("chrome://version")
-    #crawler.setCookiesInJar("/home/needcaffeine/cookieFile.json")
+    crawler.initializeDrivers()
     crawler.clearCookies()
+    crawler.closeDrivers()
+    crawler.manualCookieJarSetter()
+    crawler.initializeDrivers()
+    # crawler._driver.get("https://naruto.forumcommunity.net/")
+    
+    #crawler._driver.get("chrome://version")
+    #crawler.setCookiesInJar("/home/needcaffeine/cookieFile.json")
+    #crawler.initializeCookies()
+
+
+
+    #<---
+    #crawler.clearCookies()
+    # WebDriverWait(crawler._driver,100).until_not(ff) 
+    # print("ciao")
+    #<---here
+
     #crawler.initializeCookies()
     #crawler._driver.get("https://naruto.forumcommunity.net/")
     #crawler._get("https://gaogdasona.com")
@@ -344,7 +383,7 @@ if __name__=="__main__":
 
 
     
-    #crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
+    crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
     #print(crawler._driver.get_cookies())
 
-    #crawler.start()
+    crawler.start()
