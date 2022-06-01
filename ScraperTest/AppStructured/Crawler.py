@@ -75,16 +75,16 @@ class Crawler(Thread):
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
         self._options.add_argument("--enable-javascript")
         #TODO:
-        #self._options.add_argument("user-data-dir=/home/needcaffeine/.config/google-chrome")#here user data dir
-        #self._options.add_argument("profile-directory=Default")
+        self._options.add_argument("user-data-dir=/home/needcaffeine/.config/google-chrome/Profile1")#here user data dir
+        self._options.add_argument("profile-directory=Profile")
         
 
         self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         if tor:
             self._tor = True
             #TODO: 
-            #self._options.arguments[-1]= "user-data-dir=/home/needcaffeine/.config/google-chrome/bho"#here user data dir
-            #self._options.add_argument("profile-directory=Default2")
+            self._options.arguments[-1]= "user-data-dir=/home/needcaffeine/.config/google-chrome/Profile2"#here user data dir
+            self._options.add_argument("profile-directory=Profile")
 
             self._options.add_argument("--proxy-server=socks5://127.0.0.1:9050")
             self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
@@ -151,8 +151,8 @@ class Crawler(Thread):
                     self._lastVisitedPageSource = self._driver.page_source
                 return True
         except Exception :
-            print("can't resolve "+ url)
-            print(traceback.format_exc())
+            print("can't resolve or timeout exception on "+ url)
+            #print(traceback.format_exc())
 
     
     def _regexSearch(self,url,content,regex):
@@ -333,11 +333,11 @@ if __name__=="__main__":
     crawler = Crawler(False,True,debug=True)
     
     # crawler._driver.get("chrome://version")
-    crawler.setCookiesInJar("/home/needcaffeine/cookieFile.json")
+    #crawler.setCookiesInJar("/home/needcaffeine/cookieFile.json")
     crawler.clearCookies()
-    crawler.initializeCookies()
-    crawler._driver.get("https://naruto.forumcommunity.net/")
-
+    #crawler.initializeCookies()
+    #crawler._driver.get("https://naruto.forumcommunity.net/")
+    #crawler._get("https://gaogdasona.com")
 
     
 
