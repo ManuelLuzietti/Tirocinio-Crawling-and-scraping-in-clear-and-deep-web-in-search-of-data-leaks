@@ -12,6 +12,7 @@ from RepeatTimer import RepeatTimer
 from Scraper import Scraper
 from DBManager import DBManager
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.keys import Keys
 
 class Crawler(Thread):
     _options = None
@@ -114,10 +115,9 @@ class Crawler(Thread):
         self._manager = DBManager(db=db)
 
     def initializeDrivers(self):
-        print("None clearweb")
+        self.closeDrivers()
         self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         if self._tor :
-            print("None deepweb")
             self._driverTor = webdriver.Chrome(chrome_options=self._optionsTor,service=Service(ChromeDriverManager().install()))
             
         
@@ -354,9 +354,26 @@ class Crawler(Thread):
             WebDriverWait(crawler._driverTor,10000).until_not(ff)
     
     def closeDrivers(self):
-        self._driver.quit()
-        if self._tor:
+        if self._driver is not None:
+            self._driver.quit()
+        if self._tor and self._driverTor is not None:
             self._driverTor.quit()
+    
+    def addStartingPageWithDorks(self,dorks):
+        self.initializeDrivers()
+        self._driver.get("http://www.google.com/")
+        try:
+            sleep(1)
+            elem = self._driver.find_element_by_name("q")
+            sleep(1)
+            elem.send_keys(dorks)
+            sleep(1)
+            elem.send_keys(Keys.RETURN)
+            sleep(1)
+            self._manager.addToWebsiteQueue(self._driver.current_url)
+        except:
+            print("input elemet not found in www.google.com")
+            return
 
 def ff(driver):
     try:
@@ -364,10 +381,13 @@ def ff(driver):
         return True
     except:
         return False
+
+
     
 if __name__=="__main__":
-    crawler = Crawler(False,True,debug=True,proxy="socks5://5.161.86.206:1080")
-    crawler.initializeDrivers()
+    crawler = Crawler(False,True,debug=True) #proxy="socks5://5.161.86.206:1080")
+    #crawler.initializeDrivers()
+    crawler.addStartingPageWithDorks("ciao")
     # crawler.clearCookies()
     # crawler.closeDrivers()
     # crawler.manualCookieJarSetter()
@@ -397,9 +417,9 @@ if __name__=="__main__":
 
 
     
-    #crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
+    crawler.setScraperConfig("http://ciao.com",regex="[dD]rugs?",cssSelector="title")
     #print(crawler._driver.get_cookies())
     #crawler.setTransversalTimeout(5)
-    #crawler.start()
+    crawler.start()
 
-    crawler._driver.get("https://www.whatsmyip.org/")
+    #crawler._driver.get("https://www.whatsmyip.org/")
