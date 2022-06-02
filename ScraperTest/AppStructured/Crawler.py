@@ -28,6 +28,7 @@ class Crawler(Thread):
     # _blockedWebsites = set() #
     _timer = None
     _manager = None
+    _transversalTimeout = None
 
     def _pause(self):
         self.__flag.clear()
@@ -48,11 +49,11 @@ class Crawler(Thread):
     
 
 
-    def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0):
+    def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0,proxy=None):
         Thread.__init__(self)
-        self.setup(headless,tor,useragent,debug,db)
+        self.setup(headless,tor,useragent,debug,db,proxy)
     
-    def setup(self,headless,tor,useragent,debug,db):
+    def setup(self,headless,tor,useragent,debug,db,proxy):
         self.__flag = Event()
         self.__flag.set()
         self.__running = Event()
@@ -76,6 +77,8 @@ class Crawler(Thread):
         else :
             self._options.add_argument('user-agent= Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
         self._options.add_argument("--enable-javascript")
+        if proxy is not None:    
+            self._options.add_argument(f"--proxy-server={proxy}")
         #TODO:
         self._options.add_argument("user-data-dir=/home/needcaffeine/.config/google-chrome/Profile1")#here user data dir
         self._options.add_argument("profile-directory=Profile")
@@ -103,6 +106,7 @@ class Crawler(Thread):
             self._optionsTor.add_argument("profile-directory=Profile")
 
             self._optionsTor.add_argument("--proxy-server=socks5://127.0.0.1:9050")
+
             # self._driverTor = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         else:
             self._tor = False
@@ -228,6 +232,7 @@ class Crawler(Thread):
             return 
         #per ogni link estratto
         #print(self._extractLinks(link)) #<-da togliere per vedere link estratti da ogni pagina
+        count = 0
         for v in self._extractLinks(link,content):
             if not self.__running.is_set():
                 return 
@@ -243,6 +248,11 @@ class Crawler(Thread):
                     self._manager.addToWebsiteQueue(site)
             else : 
                 #se link interno a dominio vado di scrape
+                count += 1
+                if self._transversalTimeout is not None and count > self._transversalTimeout:
+                    if self._debug:
+                        print("transversal timeout reached on scraping childs of: " + link)
+                    break
                 self._crawl(v,depth-1,cssSelector,attr)
 
     def pingWebsite(self,site):
@@ -329,11 +339,13 @@ class Crawler(Thread):
         if self._tor:
             self._driverTor.delete_all_cookies()
             
-    #TODO: vanno messi i vari try catch per usare questo.
     def setGetTimeout(self,seconds=-1):
         crawler._driver.set_page_load_timeout(seconds)
         if self._tor:
             crawler._driverTor.set_page_load_timeout(seconds)
+
+    def setTransversalTimeout(self,nLink:int):
+        self._transversalTimeout = nLink
 
     def manualCookieJarSetter(self):
         self.initializeDrivers()
@@ -354,12 +366,14 @@ def ff(driver):
         return False
     
 if __name__=="__main__":
-    crawler = Crawler(False,True,debug=True)
+    crawler = Crawler(False,True,debug=True,proxy="socks5://5.161.86.206:1080")
     crawler.initializeDrivers()
-    crawler.clearCookies()
-    crawler.closeDrivers()
-    crawler.manualCookieJarSetter()
-    crawler.initializeDrivers()
+    # crawler.clearCookies()
+    # crawler.closeDrivers()
+    # crawler.manualCookieJarSetter()
+    # crawler.initializeDrivers()
+
+
     # crawler._driver.get("https://naruto.forumcommunity.net/")
     
     #crawler._driver.get("chrome://version")
@@ -383,7 +397,9 @@ if __name__=="__main__":
 
 
     
-    crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
+    #crawler.setScraperConfig("https://thehiddenwiki.org/",regex="[dD]rugs?",cssSelector="title")
     #print(crawler._driver.get_cookies())
+    #crawler.setTransversalTimeout(5)
+    #crawler.start()
 
-    crawler.start()
+    crawler._driver.get("https://www.whatsmyip.org/")
