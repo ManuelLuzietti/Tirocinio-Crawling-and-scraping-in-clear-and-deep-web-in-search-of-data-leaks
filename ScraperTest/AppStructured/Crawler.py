@@ -1,6 +1,7 @@
 from multiprocessing.connection import wait
 from pickle import FALSE
 from time import sleep
+import traceback
 from pendulum import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -258,13 +259,14 @@ class Crawler(Thread):
     def pingWebsite(self,site):
         return os.system("ping -c 1 "+site) == 0
     
-    def crawlWebsite(self,website,cssSelector=None,attr=None,depth=1,regex=None):
-        if website[-1] == "/":
-            website = website[:-1]
-        if not website.endswith(".onion"):
-            if not self.pingWebsite(up.urlparse(website).hostname):
-                return 
-        self._manager.addToWebsiteQueue(website)
+    def crawlWebsite(self,websites,cssSelector=None,attr=None,depth=1,regex=None):
+        for website in websites:
+            if website[-1] == "/":
+                website = website[:-1]
+            self._manager.addToWebsiteQueue(website)
+        # if not website.endswith(".onion"):
+        #     if not self.pingWebsite(up.urlparse(website).hostname):
+        #         return 
         while not self._manager.isWebsiteQueueEmpty() and self.__running.is_set():
             self.__flag.wait()
             next = self._manager.getFromWebsiteQueue()
@@ -280,10 +282,10 @@ class Crawler(Thread):
             self._timer.cancel()
 
     def run(self):
-        self.crawlWebsite(self.website,self.cssSelector,self.attr,self.depth,self.regex)
+        self.crawlWebsite(self.websites,self.cssSelector,self.attr,self.depth,self.regex)
     
-    def setScraperConfig(self,website,cssSelector=None,attr=None,depth=1,regex=None):
-        self.website = website
+    def setScraperConfig(self,websites:list = [],cssSelector=None,attr=None,depth=1,regex=None):
+        self.websites = websites
         self.cssSelector = cssSelector
         self.attr = attr
         self.depth = depth
@@ -387,7 +389,7 @@ def ff(driver):
 if __name__=="__main__":
     crawler = Crawler(False,True,debug=True) #proxy="socks5://5.161.86.206:1080")
     #crawler.initializeDrivers()
-    crawler.addStartingPageWithDorks("ciao")
+    #crawler.addStartingPageWithDorks("ciao")
     # crawler.clearCookies()
     # crawler.closeDrivers()
     # crawler.manualCookieJarSetter()
@@ -417,9 +419,10 @@ if __name__=="__main__":
 
 
     
-    crawler.setScraperConfig("http://ciao.com",regex="[dD]rugs?",cssSelector="title")
+    crawler.setScraperConfig(["https://naruto.forumcommunity.net/"],regex="[dD]rugs?",cssSelector="title")
     #print(crawler._driver.get_cookies())
     #crawler.setTransversalTimeout(5)
+    crawler.initializeDrivers()
     crawler.start()
 
     #crawler._driver.get("https://www.whatsmyip.org/")
