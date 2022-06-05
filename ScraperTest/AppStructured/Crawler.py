@@ -340,20 +340,19 @@ class Crawler(Thread):
         self._driver.delete_all_cookies()
         if self._tor:
             self._driverTor.delete_all_cookies()
-            
     def setGetTimeout(self,seconds=-1):
-        crawler._driver.set_page_load_timeout(seconds)
+        self._driver.set_page_load_timeout(seconds)
         if self._tor:
-            crawler._driverTor.set_page_load_timeout(seconds)
+            self._driverTor.set_page_load_timeout(seconds)
 
     def setTransversalTimeout(self,nLink:int):
         self._transversalTimeout = nLink
 
     def manualCookieJarSetter(self):
         self.initializeDrivers()
-        WebDriverWait(crawler._driver,10000).until_not(ff)
+        WebDriverWait(self._driver,10000).until_not(ff)
         if self._tor:
-            WebDriverWait(crawler._driverTor,10000).until_not(ff)
+            WebDriverWait(self._driverTor,10000).until_not(ff)
     
     def closeDrivers(self):
         if self._driver is not None:
