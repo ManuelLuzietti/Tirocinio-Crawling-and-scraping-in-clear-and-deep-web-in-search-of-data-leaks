@@ -16,6 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.keys import Keys
 
 class Crawler(Thread):
+    _regexKeys = None
     _options = None
     _driver = None
     _currentUrl = None
@@ -181,24 +182,42 @@ class Crawler(Thread):
             #print(traceback.format_exc())
 
     
-    def _regexSearch(self,url,content,regex):
-        result = self._scraper.regexSearch(content,regex)
-        if result != None:
-            self._manager.addLeak(url)
-            if self._debug:
-                print("found pattern match in: "+url)
+    def _regexSearch(self,url,content):
+        if self._regexKeys is None:
+            print("please set scraperConfig or keywords")
+            return
+        for re in self._regexKeys["mainKeywords"]:
+            if self._scraper.regexSearch(content,re)!= None:
+                if len(self._regexKeys["companyKeywords"]) != 0:
+                    for compRe in self._regexKeys["companyKeywords"]:
+                        if self._scraper.regexSearch(content,compRe) != None:
+                            self._manager.addLeak(url)
+                            if self._debug :
+                                print("found pattern match in: "+url)
+                            break
+                else:
+                    self._manager.addLeak(url)
+                    if self._debug :
+                        print("found pattern match in: "+url)
+                    break
+        
+        # result = self._scraper.regexSearch(content,regex)
+        # if result != None:
+        #     self._manager.addLeak(url)
+        #     if self._debug:
+        #         print("found pattern match in: "+url)
 
 
-    def _extract(self,url,content,cssSelector=None,attr=None,regex=None):
-        if cssSelector == None and regex==None:
+    def _extract(self,url,content,cssSelector=None,attr=None,regex:bool=False):
+        if cssSelector == None and regex==False:
             return 
         if self._scraper.regexSearch(content,"[cC]loud[fF]lare") != None:
             self._manager.addBlockedWebsite(url)
             if self._debug:
                 print("blocked website by cloudflare: "+url)
             return
-        if regex!= None:
-            self._regexSearch(url,content,regex)
+        if regex!= False:
+            self._regexSearch(url,content)
         if cssSelector != None:
             extracted = self._scraper.getContent(content,cssSelector,attr)
             if extracted is not None:
@@ -214,7 +233,7 @@ class Crawler(Thread):
     def _updateVisited(self,url):
         self._manager.addVisitedWebsite(url)
 
-    def _crawl(self,link,depth,cssSelector=None,attr=None,regex=None):
+    def _crawl(self,link,depth,cssSelector=None,attr=None,regex=False):
         if not self.__running.is_set():
             return
         self.__flag.wait()
@@ -238,7 +257,7 @@ class Crawler(Thread):
             if not self.__running.is_set():
                 return 
             self.__flag.wait()
-            self._manager.addVisitedLink("link")
+            self._manager.addVisitedLink(link)
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
             #se link è ref fuori dal dominio
@@ -254,12 +273,12 @@ class Crawler(Thread):
                     if self._debug:
                         print("transversal timeout reached on scraping childs of: " + link)
                     break
-                self._crawl(v,depth-1,cssSelector,attr)
+                self._crawl(v,depth-1,cssSelector,attr,regex)
 
     def pingWebsite(self,site):
         return os.system("ping -c 1 "+site) == 0
     
-    def crawlWebsite(self,websites,cssSelector=None,attr=None,depth=1,regex=None):
+    def crawlWebsite(self,websites,cssSelector=None,attr=None,depth=1,regex=False):
         for website in websites:
             if website[-1] == "/":
                 website = website[:-1]
@@ -284,12 +303,15 @@ class Crawler(Thread):
     def run(self):
         self.crawlWebsite(self.websites,self.cssSelector,self.attr,self.depth,self.regex)
     
-    def setScraperConfig(self,websites:list = [],cssSelector=None,attr=None,depth=1,regex=None):
+    def setScraperConfig(self,websites:list = [],cssSelector=None,attr=None,depth=1,regex=False):
         self.websites = websites
         self.cssSelector = cssSelector
         self.attr = attr
         self.depth = depth
         self.regex = regex
+        with open("AppStructured/keywords.json","r") as f:
+            import json
+            self._regexKeys = json.loads(f.read())
 
     def setCookiesInJar(self,cookieFile=None,cookieList=None):
         if cookieFile is None and cookieList is None:
@@ -387,6 +409,15 @@ def ff(driver):
     
 if __name__=="__main__":
     crawler = Crawler(False,True,debug=True) #proxy="socks5://5.161.86.206:1080")
+    ####
+    # fare test:
+    # from KeywordsGenerator import generate
+    # generate(["odierne"])
+    # crawler.setScraperConfig(["https://vargiuweb.it/"],regex=True)
+    # crawler.initializeDrivers()
+    # crawler.start()
+    ###
+
     #crawler.initializeDrivers()
     #crawler.addStartingPageWithDorks("ciao")
     # crawler.clearCookies()
@@ -418,10 +449,10 @@ if __name__=="__main__":
 
 
     
-    crawler.setScraperConfig(["https://naruto.forumcommunity.net/"],regex="[dD]rugs?",cssSelector="title")
-    #print(crawler._driver.get_cookies())
-    #crawler.setTransversalTimeout(5)
-    crawler.initializeDrivers()
-    crawler.start()
+    # crawler.setScraperConfig(["https://naruto.forumcommunity.net/"],regex="[dD]rugs?",cssSelector="title")
+    # #print(crawler._driver.get_cookies())
+    # #crawler.setTransversalTimeout(5)
+    # crawler.initializeDrivers()
+    # crawler.start()
 
     #crawler._driver.get("https://www.whatsmyip.org/")

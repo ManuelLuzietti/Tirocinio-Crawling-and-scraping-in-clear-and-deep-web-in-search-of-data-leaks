@@ -11,7 +11,7 @@ class Scraper:
         unfilteredLinks = [ a['href'] for a in soup.select("a[href]")]
         return unfilteredLinks
     def regexSearch(self,content,regex):
-        return re.search(regex,content)
+        return re.search(regex,content,flags=re.IGNORECASE)
     def getContent(self,content,cssSelector,attr):
         if content is None or cssSelector is None:
             return []
