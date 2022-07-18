@@ -148,6 +148,8 @@ class Crawler(Thread):
     def _filterLinks(self,urls,currentUrl):
         filteredUrls = []
         for url in urls:
+            if self.containsBlockedPath(url):
+                continue 
             if url.startswith("#"):
                 pass
             elif url.startswith("/"):
@@ -158,9 +160,10 @@ class Crawler(Thread):
             elif  url.startswith(currentUrl):
                 filteredUrls.append(url)
             elif url.startswith("http") or url.startswith("https"):
-                self._manager.addToWebsiteQueue(url)
-                if self._debug :
-                    print("aggiunto sito a webstack: "+ url)
+                #self._manager.addToWebsiteQueue(url) #bug1
+                filteredUrls.append(url)
+                # if self._debug :
+                #     print("aggiunto sito a webstack: "+ url)
             elif not url.startswith("/"):
                 if currentUrl.endswith("/"):
                     filteredUrls.append(currentUrl+url)
@@ -168,7 +171,11 @@ class Crawler(Thread):
                     filteredUrls.append(currentUrl+"/"+url)
         urlsNotVisited = []
         for link in filteredUrls:
-            if self._checkVisitedLink(link):
+            if self._queryTruncation:
+                pos = link.find("?")
+                if pos != -1:
+                    link = link[:pos]
+            if self._checkVisitedLink(link) or self.checkVisited(link):
                 if self._debug:
                     print("skipping already visited: "+link)
                 continue
@@ -256,28 +263,23 @@ class Crawler(Thread):
         if not self.__running.is_set():
             return
         self.__flag.wait()
-        if self._debug:
-            print("scraping :"+link+" depth= " + str(depth))
         #estrae contenuto
-        if self._checkVisitedLink(link):
+        if self._checkVisitedLink(link) or self.checkVisited(link):
             if self._debug:
                 print("skipping visited Link: "+link)
             return 
-        if self.containsBlockedPath(link):
-            if self._debug:
-                print("skipping Link with blocked path: "+link)
-            return 
-
+        if self._debug:
+            print("scraping :"+link+" depth= " + str(depth))
         if not self._get(link):
             return 
         content = self._lastVisitedPageSource
         self._extract(link,content,cssSelector,attr,regex)  
+        self._manager.addVisitedLink(link)
         if depth == 0:
             return 
         #per ogni link estratto
         #print(self._extractLinks(link)) #<-da togliere per vedere link estratti da ogni pagina
         count = 0
-        self._manager.addVisitedLink(link)
 
         for v in self._extractLinks(link,content):
             if not self.__running.is_set():
@@ -287,10 +289,12 @@ class Crawler(Thread):
             currentparse = up.urlparse(link)
             #se link è ref fuori dal dominio
             if(vparse.hostname != currentparse.hostname):
-                site = vparse[0]+vparse[1]
+                site = vparse[0]+ "://" + vparse[1]
                 #se sito non già in stack da visitare
                 if not self._manager.isWebsiteInQueue(site):
                     self._manager.addToWebsiteQueue(site)
+                    if self._debug :
+                        print("add " + site + " to the queue")
             else : 
                 #se link interno a dominio vado di scrape
                 count += 1
@@ -298,8 +302,6 @@ class Crawler(Thread):
                     if self._debug:
                         print("transversal timeout reached on scraping childs of: " + link)
                     break
-                if self._queryTruncation:
-                    v = "".join(vparse[1:4])
                 self._crawl(v,depth-1,cssSelector,attr,regex)
 
     def pingWebsite(self,site):
@@ -316,11 +318,13 @@ class Crawler(Thread):
         while not self._manager.isWebsiteQueueEmpty() and self.__running.is_set():
             self.__flag.wait()
             next = self._manager.getFromWebsiteQueue()
-            if self.checkVisited(next):
+            if self._debug:
+                print("popped from queue "+next)
+            if self.checkVisited(next) or  self.containsBlockedPath(next) :
                 if self._debug:
-                    print("skip visited website "+website)
+                    print("skip visited/blockedPath website "+next)
                 continue
-            self._updateVisited(next)
+            #self._updateVisited(next)
             if self._debug :
                 print("scraping website: " + next)
             self._crawl(next,depth,cssSelector,attr,regex)

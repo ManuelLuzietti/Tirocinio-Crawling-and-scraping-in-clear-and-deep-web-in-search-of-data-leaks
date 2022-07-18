@@ -26,17 +26,17 @@ class TwitterScraper():
         if limit is not None:
             self.c.Limit = limit
         self.c.Store_json = True
-        self.c.Output = "tweetsScraped.json"
+        self.c.Output = "AppStructured/tweetsScraped.json"
         
     def scrape(self):
-        with open("tweetsScraped.json","w"):
+        with open("AppStructured/tweetsScraped.json","w"):
             pass
         twint.run.Search(self.c)
        
     
     def analyzeScrapedContent(self):
         tws = []
-        with open("tweetsScraped.json","r") as f:
+        with open("AppStructured/tweetsScraped.json","r") as f:
             lines = f.readlines()
             tws += [json.loads(line) for line in lines]
         for tweet in tws:
