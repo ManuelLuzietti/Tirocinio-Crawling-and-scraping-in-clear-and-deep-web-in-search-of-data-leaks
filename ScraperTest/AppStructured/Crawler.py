@@ -32,6 +32,8 @@ class Crawler(Thread):
     _timer = None
     _manager = None
     _transversalTimeout = None
+    _blockedPath = []
+    _queryTruncation = False
 
     def _pause(self):
         self.__flag.clear()
@@ -44,13 +46,30 @@ class Crawler(Thread):
         if not self._timerFlag.is_set():
             self._timerFlag.set()
 
-    def setTimeoutForRequests(self,interval):
+    def setTimeoutForRequests(self,interval:int):
         self._interval = interval
         self._timerFlag = Event()
         self._timer = RepeatTimer(interval,self._timerFunc)
         self._timer.start()
     
+    def addBlockedPath(self,path:str):
+        self._blockedPath.append(path)
+    
+    def removeBlockedPath(self,path:str):
+        if path in self._blockedPath:
+            self._blockedPath.remove(path)
 
+    def containsBlockedPath(self,url:str):
+        for path in self._blockedPath:
+            if url.find(path) != -1:
+                return True
+        return False
+    
+    def enableQueryTruncation(self):
+        self._queryTruncation = True
+
+    def disableQueryTruncation(self):
+        self._queryTruncation = False
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0,proxy=None):
         Thread.__init__(self)
@@ -121,9 +140,7 @@ class Crawler(Thread):
         self._driver = webdriver.Chrome(chrome_options=self._options,service=Service(ChromeDriverManager().install()))
         if self._tor :
             self._driverTor = webdriver.Chrome(chrome_options=self._optionsTor,service=Service(ChromeDriverManager().install()))
-            
-        
-
+                  
     def _extractLinks(self,url,content):
         links = self._scraper.getLinks(content)
         return self._filterLinks(links,url)
@@ -211,11 +228,13 @@ class Crawler(Thread):
     def _extract(self,url,content,cssSelector=None,attr=None,regex:bool=False):
         if cssSelector == None and regex==False:
             return 
-        if self._scraper.regexSearch(content,"[cC]loud[fF]lare") != None:
+        if self._scraper.regexSearch(content,"[cC]loud[fF]lare") != None and self._scraper.regexSearch(content,"one more step") != None:
             self._manager.addBlockedWebsite(url)
             if self._debug:
-                print("blocked website by cloudflare: "+url)
-            return
+                print("blocked website by cloudflare(?): "+url)
+            #self.manualCookieJarSetter(url)
+            #return #<- rimuovere commento quando sistemato bug:
+            #BUG: stringa cloudflare da sola non basta, perch matcha link di inclusione cloudflare anche se pagina non viene bloccata.
         if regex!= False:
             self._regexSearch(url,content)
         if cssSelector != None:
@@ -233,7 +252,7 @@ class Crawler(Thread):
     def _updateVisited(self,url):
         self._manager.addVisitedWebsite(url)
 
-    def _crawl(self,link,depth,cssSelector=None,attr=None,regex=False):
+    def _crawl(self,link:str,depth,cssSelector=None,attr=None,regex=False):
         if not self.__running.is_set():
             return
         self.__flag.wait()
@@ -244,6 +263,11 @@ class Crawler(Thread):
             if self._debug:
                 print("skipping visited Link: "+link)
             return 
+        if self.containsBlockedPath(link):
+            if self._debug:
+                print("skipping Link with blocked path: "+link)
+            return 
+
         if not self._get(link):
             return 
         content = self._lastVisitedPageSource
@@ -253,11 +277,12 @@ class Crawler(Thread):
         #per ogni link estratto
         #print(self._extractLinks(link)) #<-da togliere per vedere link estratti da ogni pagina
         count = 0
+        self._manager.addVisitedLink(link)
+
         for v in self._extractLinks(link,content):
             if not self.__running.is_set():
                 return 
             self.__flag.wait()
-            self._manager.addVisitedLink(link)
             vparse = up.urlparse(v)
             currentparse = up.urlparse(link)
             #se link è ref fuori dal dominio
@@ -273,6 +298,8 @@ class Crawler(Thread):
                     if self._debug:
                         print("transversal timeout reached on scraping childs of: " + link)
                     break
+                if self._queryTruncation:
+                    v = "".join(vparse[1:4])
                 self._crawl(v,depth-1,cssSelector,attr,regex)
 
     def pingWebsite(self,site):
@@ -370,8 +397,13 @@ class Crawler(Thread):
     def setTransversalTimeout(self,nLink:int):
         self._transversalTimeout = nLink
 
-    def manualCookieJarSetter(self):
-        self.initializeDrivers()
+    def manualCookieJarSetter(self,url:str=None):
+        self.initializeDrivers() 
+        if url != None:
+            if url.find(".onion") == -1:
+                self._driver.get(url)
+            else :
+                self._driverTor.get(url)
         WebDriverWait(self._driver,10000).until_not(ff)
         if self._tor:
             WebDriverWait(self._driverTor,10000).until_not(ff)
@@ -409,6 +441,9 @@ def ff(driver):
     
 if __name__=="__main__":
     crawler = Crawler(False,True,debug=True) #proxy="socks5://5.161.86.206:1080")
+    #crawler.manualCookieJarSetter()
+    
+    
     ####
     # fare test:
     # from KeywordsGenerator import generate
