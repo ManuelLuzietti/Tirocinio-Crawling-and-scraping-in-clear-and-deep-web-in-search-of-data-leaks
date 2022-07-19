@@ -2,20 +2,19 @@ from Crawler import Crawler
 from KeywordsGenerator import generate
 crawler = Crawler(False,debug=True)
 fbList = [
-    "league of legends",
-    "lol",
-    "leagueoflegends",
-    "leagueoflegend"
+    "MyFitnessPal",
+    "my fitness pal",
+    "fitness pal"
 ]
 generate(fbList)
 
 def test1():
    
     crawler.manualCookieJarSetter("https://www.nulled.to")
-    crawler.setScraperConfig(["https://www.nulled.to"],regex=True)
+    crawler.setScraperConfig(["https://www.nulled.to"],regex=True,depth=2)
     crawler.initializeDrivers()
     crawler.addBlockedPath("nulled.to/user/")
-    
+    crawler.limitToDomain("nulled.to")
     crawler.enableQueryTruncation()
     crawler.setGetTimeout(15)
     #crawler.setTimeoutForRequests(2)

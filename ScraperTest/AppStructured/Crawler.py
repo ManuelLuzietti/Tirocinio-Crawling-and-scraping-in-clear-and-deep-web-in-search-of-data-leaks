@@ -34,6 +34,7 @@ class Crawler(Thread):
     _transversalTimeout = None
     _blockedPath = []
     _queryTruncation = False
+    _domainLimited = False
 
     def _pause(self):
         self.__flag.clear()
@@ -70,6 +71,10 @@ class Crawler(Thread):
 
     def disableQueryTruncation(self):
         self._queryTruncation = False
+
+    def limitToDomain(self,domain:str):
+        self._domainLimited = True
+        self._domain = domain
 
     def __init__(self,headless=True,tor=True,useragent="default",debug=False,db=0,proxy=None):
         Thread.__init__(self)
@@ -158,10 +163,7 @@ class Crawler(Thread):
             elif  url.startswith(currentUrl):
                 filteredUrls.add(url)
             elif url.startswith("http") or url.startswith("https"):
-                #self._manager.addToWebsiteQueue(url) #bug1
                 filteredUrls.add(url)
-                # if self._debug :
-                #     print("aggiunto sito a webstack: "+ url)
             elif not url.startswith("/"):
                 if currentUrl.endswith("/"):
                     filteredUrls.add(currentUrl+url)
@@ -181,7 +183,6 @@ class Crawler(Thread):
                 continue
             else:
                 urlsNotVisited.add(link)
-        print(urlsNotVisited)
         return list(urlsNotVisited)
     
     def _get(self,url:str):
@@ -289,6 +290,8 @@ class Crawler(Thread):
             currentparse = up.urlparse(link)
             #se link è ref fuori dal dominio
             if(vparse.hostname != currentparse.hostname):
+                if self._domainLimited and vparse.hostname.find(self._domain) == -1:
+                    continue
                 site = vparse[0]+ "://" + vparse[1]
                 #se sito non già in stack da visitare
                 if not self._manager.isWebsiteInQueue(site):
