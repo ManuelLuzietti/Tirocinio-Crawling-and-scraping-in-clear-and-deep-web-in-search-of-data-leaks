@@ -11,11 +11,11 @@ generate(fbList)
 
 def test1():
    
-    #crawler.manualCookieJarSetter("https://www.nulled.to")
-    crawler.addStartingPageWithDorks("nulled.to")
-    crawler.setScraperConfig([],regex=True)
+    crawler.manualCookieJarSetter("https://www.nulled.to")
+    crawler.setScraperConfig(["https://www.nulled.to"],regex=True)
     crawler.initializeDrivers()
     crawler.addBlockedPath("nulled.to/user/")
+    
     crawler.enableQueryTruncation()
     crawler.setGetTimeout(15)
     #crawler.setTimeoutForRequests(2)

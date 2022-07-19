@@ -146,31 +146,31 @@ class Crawler(Thread):
         return self._filterLinks(links,url)
 
     def _filterLinks(self,urls,currentUrl):
-        filteredUrls = []
+        filteredUrls = set()
         for url in urls:
-            if self.containsBlockedPath(url):
-                continue 
             if url.startswith("#"):
                 pass
             elif url.startswith("/"):
                 if currentUrl.endswith("/"):
-                    filteredUrls.append(currentUrl + url[1:])
+                    filteredUrls.add(currentUrl + url[1:])
                 else:
-                    filteredUrls.append(currentUrl + url)
+                    filteredUrls.add(currentUrl + url)
             elif  url.startswith(currentUrl):
-                filteredUrls.append(url)
+                filteredUrls.add(url)
             elif url.startswith("http") or url.startswith("https"):
                 #self._manager.addToWebsiteQueue(url) #bug1
-                filteredUrls.append(url)
+                filteredUrls.add(url)
                 # if self._debug :
                 #     print("aggiunto sito a webstack: "+ url)
             elif not url.startswith("/"):
                 if currentUrl.endswith("/"):
-                    filteredUrls.append(currentUrl+url)
+                    filteredUrls.add(currentUrl+url)
                 else:
-                    filteredUrls.append(currentUrl+"/"+url)
-        urlsNotVisited = []
+                    filteredUrls.add(currentUrl+"/"+url)
+        urlsNotVisited = set()
         for link in filteredUrls:
+            if self.containsBlockedPath(link):
+                continue 
             if self._queryTruncation:
                 pos = link.find("?")
                 if pos != -1:
@@ -180,8 +180,9 @@ class Crawler(Thread):
                     print("skipping already visited: "+link)
                 continue
             else:
-                urlsNotVisited.append(link)
-        return urlsNotVisited
+                urlsNotVisited.add(link)
+        print(urlsNotVisited)
+        return list(urlsNotVisited)
     
     def _get(self,url:str):
         if self._timer is not  None:
@@ -280,7 +281,6 @@ class Crawler(Thread):
         #per ogni link estratto
         #print(self._extractLinks(link)) #<-da togliere per vedere link estratti da ogni pagina
         count = 0
-
         for v in self._extractLinks(link,content):
             if not self.__running.is_set():
                 return 
